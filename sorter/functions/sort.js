@@ -1,50 +1,50 @@
-export async function onRequest(context) {
+export async function onRequestPost(context) {
   const { request, env } = context;
 
-  // Only allow POST requests
-  if (request.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
+  // 1. Get the API Key from Cloudflare Environment Variables
+  const API_KEY = env.GROQ_API_KEY;
+
+  if (!API_KEY) {
+    return new Response(JSON.stringify({ error: "API Key missing in Cloudflare settings." }), { 
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 
   try {
+    // 2. Parse the image data from the frontend
     const { image } = await request.json();
 
+    // 3. Talk to Groq AI
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${env.GROQ_API_KEY}` // Environment variables via env
+        "Authorization": `Bearer ${API_KEY}`,
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "llama-3.2-11b-vision-preview",
+        model: "llama-3.2-11b-vision-preview", // or your preferred vision model
         messages: [
           {
             role: "user",
             content: [
-              { 
-                type: "text", 
-                text: "Analyze this image. If it's recyclable, say 'RECYCLABLE'. If it's trash, say 'TRASH'. Respond with only the word." 
-              },
-              { 
-                type: "image_url", 
-                image_url: { url: `data:image/jpeg;base64,${image}` } 
-              }
+              { type: "text", text: "Is this recyclable, compost, or trash? Answer in one word." },
+              { type: "image_url", image_url: { url: image } }
             ]
           }
-        ],
-        max_tokens: 20,
-        temperature: 0.2
+        ]
       })
     });
 
     const data = await response.json();
-
+    
+    // 4. Return the AI's answer back to your website
     return new Response(JSON.stringify(data), {
       headers: { "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error.message }), { 
       status: 500,
       headers: { "Content-Type": "application/json" }
     });
