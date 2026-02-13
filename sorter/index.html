@@ -1,110 +1,71 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Waste Sorter AI</title>
+    <title>AI Waste Sorter</title>
     <style>
-        :root { --primary: #2ecc71; --bg: skyblue; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: sans-serif; background: var(--bg); margin: 0; display: flex; justify-content: center; padding: 20px; min-height: 100vh; }
-        .card { background: #2ecc71; padding: 20px; border-radius: 25px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; }
-        h2 { background: white; padding: 10px; border-radius: 15px; color: #333; margin: 10px 0; }
-        .box { width: 100%; aspect-ratio: 1/1; border: 2px dashed #fff; border-radius: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; background: rgba(255,255,255,0.2); overflow: hidden; }
-        #preview-img { width: 100%; height: 100%; object-fit: cover; display: none; }
-        #label { color: white; font-weight: bold; }
-        .btn { width: 100%; padding: 18px; border: none; border-radius: 15px; background: #27ae60; color: white; font-weight: bold; font-size: 1.1rem; cursor: pointer; }
-        .btn:disabled { background: #95a5a6; cursor: not-allowed; opacity: 0.7; }
-        #status { font-size: 0.9rem; color: white; font-weight: bold; margin-top: 5px; }
-        #result { padding: 20px; border-radius: 15px; display: none; font-weight: 800; font-size: 1.4rem; border: 3px solid white; margin-top: 10px; }
+        body { font-family: sans-serif; text-align: center; padding: 20px; }
+        #preview { max-width: 300px; margin: 10px; display: none; }
+        .loading { color: blue; display: none; }
     </style>
 </head>
 <body>
-<div class="card">
-    <h2>♻️ Waste Sorter</h2>
-    <div class="box" id="dropZone">
-        <span id="label">📸 Tap to Take Photo</span>
-        <img id="preview-img">
-    </div>
-    <input type="file" id="fileInput" accept="image/*" capture="camera" style="display:none">
-    <button id="classifyBtn" class="btn" disabled>Upload a Photo</button>
-    <div id="status">Ready</div>
-    <div id="result"></div>
-</div>
+    <h1>Waste Sorter AI</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <br>
+    <img id="preview">
+    <br>
+    <button id="analyzeBtn">Analyze Waste</button>
+    <p id="loadingText" class="loading">Thinking...</p>
+    <h2 id="result"></h2>
 
-<script>
-    const fileInput = document.getElementById('fileInput');
-    const dropZone = document.getElementById('dropZone');
-    const previewImg = document.getElementById('preview-img');
-    const label = document.getElementById('label');
-    const classifyBtn = document.getElementById('classifyBtn');
-    const status = document.getElementById('status');
-    const resultDiv = document.getElementById('result');
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const preview = document.getElementById('preview');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resultText = document.getElementById('result');
+        const loadingText = document.getElementById('loadingText');
 
-    dropZone.onclick = () => fileInput.click();
-
-    fileInput.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                previewImg.src = event.target.result;
-                previewImg.style.display = 'block';
-                label.style.display = 'none';
-                classifyBtn.disabled = false;
-                status.innerText = "Photo loaded!";
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    classifyBtn.onclick = async () => {
-        classifyBtn.disabled = true;
-        status.innerText = "Compressing & Sending...";
-        resultDiv.style.display = "none";
-        
-        // SPEED FIX: Downsize image to 300x300 for faster upload
-        const canvas = document.createElement('canvas');
-        canvas.width = 300; 
-        canvas.height = 300;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(previewImg, 0, 0, 300, 300);
-        
-        // QUALITY FIX: Use 0.4 quality to keep file size tiny
-        const base64 = canvas.toDataURL('image/jpeg', 0.4).split(',')[1];
-
-        try {
-            // Updated endpoint for Cloudflare Pages Functions
-            const response = await fetch("/sort", {
-                method: "POST",
-                body: JSON.stringify({ image: base64 })
-            });
-
-            if (!response.ok) throw new Error("Connection Timeout. Try again.");
-
-            const data = await response.json();
-            if (data.choices && data.choices[0]) {
-                const content = data.choices[0].message.content.toUpperCase();
-                resultDiv.style.display = "block";
-                
-                if (content.includes("RECYCLABLE")) {
-                    resultDiv.style.background = "white";
-                    resultDiv.style.color = "#27ae60";
-                    resultDiv.innerText = "♻️ RECYCLABLE";
-                } else {
-                    resultDiv.style.background = "#34495e";
-                    resultDiv.style.color = "white";
-                    resultDiv.innerText = "🗑️ TRASH";
-                }
-                status.innerText = "Analysis Complete!";
+        // Show preview of the image
+        imageInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = 'inline-block';
             }
-        } catch (err) {
-            status.innerText = "Error: " + err.message;
-            console.error(err);
-        } finally {
-            classifyBtn.disabled = false;
-        }
-    };
-</script>
+        };
+
+        analyzeBtn.onclick = async () => {
+            const file = imageInput.files[0];
+            if (!file) return alert("Please upload a photo first!");
+
+            loadingText.style.display = 'block';
+            resultText.innerText = "";
+
+            // Convert image to Base64
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onloadend = async () => {
+                const base64Image = reader.result;
+
+                try {
+                    // Send to Cloudflare Function
+                    const response = await fetch("/sort", {
+                        method: "POST", // Must match onRequestPost
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ image: base64Image })
+                    });
+
+                    if (!response.ok) throw new Error("Server error (405 or 500)");
+
+                    const data = await response.json();
+                    resultText.innerText = "Category: " + data.choices[0].message.content;
+                } catch (err) {
+                    resultText.innerText = "Error: " + err.message;
+                } finally {
+                    loadingText.style.display = 'none';
+                }
+            };
+        };
+    </script>
 </body>
 </html>
